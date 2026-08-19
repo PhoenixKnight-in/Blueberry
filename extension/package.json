@@ -1,0 +1,47 @@
+{
+  "name": "blueberry",
+  "displayName": "Blueberry - AI Dependency Validator",
+  "description": "Verifies AI-suggested packages before you install them",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onLanguage:python"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "blueberry.viewDetails", "title": "Blueberry: View Details" },
+      { "command": "blueberry.ignore", "title": "Blueberry: Ignore Package" },
+      { "command": "blueberry.openDashboard", "title": "Blueberry: Open Dashboard" }
+    ],
+    "configuration": {
+      "title": "Blueberry",
+      "properties": {
+        "blueberry.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "URL of the Blueberry FastAPI backend"
+        },
+        "blueberry.sensitivityThreshold": {
+          "type": "number",
+          "default": 50,
+          "description": "Minimum risk score (0-100) that triggers a warning"
+        },
+        "blueberry.enabledEcosystems": {
+          "type": "array",
+          "default": ["pypi"],
+          "description": "Which package ecosystems Blueberry should check"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  }
+}
