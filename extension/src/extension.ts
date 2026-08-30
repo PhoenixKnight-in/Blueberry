@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { scanDocument, disposeDecorationTypes } from './scanner';
 
 let diagnosticCollection: vscode.DiagnosticCollection;
 
@@ -22,6 +23,28 @@ export function activate(context: vscode.ExtensionContext) {
   });
 
   context.subscriptions.push(viewDetails, ignorePackage, openDashboard);
+
+  const scan = (document: vscode.TextDocument) => {
+    scanDocument(document, diagnosticCollection).catch((err) => {
+      console.error('Blueberry: scan failed', err);
+    });
+  };
+
+  if (vscode.window.activeTextEditor) {
+    scan(vscode.window.activeTextEditor.document);
+  }
+
+  context.subscriptions.push(
+    vscode.workspace.onDidOpenTextDocument(scan),
+    vscode.workspace.onDidSaveTextDocument(scan),
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      if (editor) {
+        scan(editor.document);
+      }
+    })
+  );
 }
 
-export function deactivate() {}
+export function deactivate() {
+  disposeDecorationTypes();
+}

@@ -10,6 +10,13 @@ export interface PackageDetection {
   ecosystem: Ecosystem;
 }
 
+/** A single detected occurrence, with its location in the source buffer. */
+export interface PackageOccurrence extends PackageDetection {
+  line: number; // 0-based line index
+  startCol: number; // 0-based character offset where the name starts
+  endCol: number; // 0-based character offset where the name ends (exclusive)
+}
+
 const FROM_IMPORT_LINE_RE = /^\s*from\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s+import\s+/;
 const IMPORT_LINE_RE = /^\s*import\s+(.+)$/;
 const IMPORT_TARGET_NAME_RE = /^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*/;
@@ -19,13 +26,15 @@ function topLevelName(modulePath: string): string {
 }
 
 /**
- * Extracts candidate package names from `import x` / `from x import y`
- * statements in a Python source buffer.
+ * Extracts candidate package occurrences from `import x` / `from x import y`
+ * statements in a Python source buffer, with their position in the buffer.
  */
-export function extractImportedPackages(text: string): PackageDetection[] {
-  const results: PackageDetection[] = [];
+export function extractImportedPackages(text: string): PackageOccurrence[] {
+  const results: PackageOccurrence[] = [];
+  const lines = text.split(/\r?\n/);
 
-  for (const rawLine of text.split(/\r?\n/)) {
+  for (let lineNo = 0; lineNo < lines.length; lineNo++) {
+    const rawLine = lines[lineNo];
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) {
       continue;
@@ -33,7 +42,11 @@ export function extractImportedPackages(text: string): PackageDetection[] {
 
     const fromMatch = line.match(FROM_IMPORT_LINE_RE);
     if (fromMatch) {
-      results.push({ name: topLevelName(fromMatch[1]), ecosystem: 'pypi' });
+      const name = topLevelName(fromMatch[1]);
+      const startCol = rawLine.indexOf(name);
+      if (startCol !== -1) {
+        results.push({ name, ecosystem: 'pypi', line: lineNo, startCol, endCol: startCol + name.length });
+      }
       continue;
     }
 
@@ -42,6 +55,7 @@ export function extractImportedPackages(text: string): PackageDetection[] {
       continue;
     }
 
+    let searchFrom = 0;
     for (const rawTarget of importMatch[1].split(',')) {
       let target = rawTarget.split('#')[0].trim();
       target = target.replace(/\s+as\s+\w+\s*$/i, '').trim();
@@ -49,9 +63,16 @@ export function extractImportedPackages(text: string): PackageDetection[] {
         continue;
       }
       const nameMatch = target.match(IMPORT_TARGET_NAME_RE);
-      if (nameMatch) {
-        results.push({ name: topLevelName(nameMatch[0]), ecosystem: 'pypi' });
+      if (!nameMatch) {
+        continue;
       }
+      const name = topLevelName(nameMatch[0]);
+      const idx = rawLine.indexOf(name, searchFrom);
+      if (idx === -1) {
+        continue;
+      }
+      results.push({ name, ecosystem: 'pypi', line: lineNo, startCol: idx, endCol: idx + name.length });
+      searchFrom = idx + name.length;
     }
   }
 
@@ -63,14 +84,16 @@ const PACKAGE_SPEC_RE = /^([A-Za-z0-9][\w.\-]*)\s*(==|>=|<=|~=|!=|===|<|>)?\s*([
 const REQUIREMENT_FILE_FLAGS = new Set(['-r', '--requirement']);
 
 /**
- * Extracts candidate package names from `pip install ...` command strings
- * (including `pip3 install` / `python -m pip install`), ignoring flags and
- * `-r requirements.txt`-style file references.
+ * Extracts candidate package occurrences from `pip install ...` command
+ * strings (including `pip3 install` / `python -m pip install`), ignoring
+ * flags and `-r requirements.txt`-style file references.
  */
-export function extractPipInstallPackages(text: string): PackageDetection[] {
-  const results: PackageDetection[] = [];
+export function extractPipInstallPackages(text: string): PackageOccurrence[] {
+  const results: PackageOccurrence[] = [];
+  const lines = text.split(/\r?\n/);
 
-  for (const rawLine of text.split(/\r?\n/)) {
+  for (let lineNo = 0; lineNo < lines.length; lineNo++) {
+    const rawLine = lines[lineNo];
     const line = rawLine.trim();
     if (!line || line.startsWith('#')) {
       continue;
@@ -83,6 +106,7 @@ export function extractPipInstallPackages(text: string): PackageDetection[] {
 
     const tokens = pipMatch[1].split(/\s+/).filter(Boolean);
     let i = 0;
+    let searchFrom = 0;
     while (i < tokens.length) {
       const token = tokens[i];
 
@@ -97,11 +121,22 @@ export function extractPipInstallPackages(text: string): PackageDetection[] {
 
       const specMatch = token.match(PACKAGE_SPEC_RE);
       if (specMatch) {
-        const detection: PackageDetection = { name: specMatch[1], ecosystem: 'pypi' };
-        if (specMatch[3]) {
-          detection.version = specMatch[3];
+        const name = specMatch[1];
+        const idx = rawLine.indexOf(name, searchFrom);
+        if (idx !== -1) {
+          const occurrence: PackageOccurrence = {
+            name,
+            ecosystem: 'pypi',
+            line: lineNo,
+            startCol: idx,
+            endCol: idx + name.length,
+          };
+          if (specMatch[3]) {
+            occurrence.version = specMatch[3];
+          }
+          results.push(occurrence);
+          searchFrom = idx + name.length;
         }
-        results.push(detection);
       }
       i += 1;
     }
@@ -110,16 +145,26 @@ export function extractPipInstallPackages(text: string): PackageDetection[] {
   return results;
 }
 
+/** Runs both extractors over a buffer and returns every raw occurrence found. */
+export function detectOccurrences(text: string): PackageOccurrence[] {
+  return [...extractImportedPackages(text), ...extractPipInstallPackages(text)];
+}
+
 /**
  * Runs both extractors over a buffer and merges the results into one
  * normalized, deduplicated list (case-insensitive on package name).
+ * Use this when you need "what packages does this buffer reference"
+ * without caring where each one appears (e.g. to call the backend).
  */
 export function detectPackages(text: string): PackageDetection[] {
-  const all = [...extractImportedPackages(text), ...extractPipInstallPackages(text)];
   const byName = new Map<string, PackageDetection>();
 
-  for (const detection of all) {
-    const key = detection.name.toLowerCase();
+  for (const occurrence of detectOccurrences(text)) {
+    const key = occurrence.name.toLowerCase();
+    const detection: PackageDetection = { name: occurrence.name, ecosystem: occurrence.ecosystem };
+    if (occurrence.version) {
+      detection.version = occurrence.version;
+    }
     const existing = byName.get(key);
     if (!existing || (!existing.version && detection.version)) {
       byName.set(key, detection);
