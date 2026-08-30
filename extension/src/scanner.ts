@@ -1,10 +1,7 @@
 import * as vscode from 'vscode';
 import { detectOccurrences, detectPackages } from './core/detect';
 import { checkPackages, CheckResult } from './core/backendClient';
-
-// TODO(task 3): these will move into a shared design-tokens module.
-const CAUTION_COLOR = '#E2A336';
-const HIGH_COLOR = '#F14C4C';
+import { severityColors } from './core/tokens';
 
 type Tier = 'caution' | 'high' | 'safe';
 
@@ -17,12 +14,12 @@ function getDecorationTypes(): {
 } {
   if (!cautionDecorationType) {
     cautionDecorationType = vscode.window.createTextEditorDecorationType({
-      textDecoration: `underline dashed ${CAUTION_COLOR}`,
+      textDecoration: `underline dashed ${severityColors.caution}`,
     });
   }
   if (!highDecorationType) {
     highDecorationType = vscode.window.createTextEditorDecorationType({
-      textDecoration: `underline dashed ${HIGH_COLOR}`,
+      textDecoration: `underline dashed ${severityColors.high}`,
     });
   }
   return { caution: cautionDecorationType, high: highDecorationType };
