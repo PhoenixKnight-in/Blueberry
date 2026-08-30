@@ -37,7 +37,9 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "watch": "tsc -watch -p ./",
+    "pretest": "tsc -p ./tsconfig.test.json",
+    "test": "node --test \"out-test/**/*.test.js\""
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
