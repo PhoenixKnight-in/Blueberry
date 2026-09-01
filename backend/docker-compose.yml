@@ -1,0 +1,60 @@
+# Local development stack: the API plus the two backing services it now needs.
+#
+#   docker compose up --build
+#
+# The GitHub token is passed through from the host environment (or the host's
+# .env) and is never written into this file or baked into the image.
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      BLUEBERRY_ENVIRONMENT: development
+      BLUEBERRY_REDIS_URL: redis://redis:6379/0
+      BLUEBERRY_DATABASE_URL: postgresql+asyncpg://blueberry:blueberry@postgres:5432/blueberry
+      # Read from the host env / .env -- not stored here.
+      BLUEBERRY_GITHUB_TOKEN: ${BLUEBERRY_GITHUB_TOKEN:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    # Cache only -- nothing here needs to survive a restart, so an eviction
+    # policy is preferable to unbounded growth.
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: blueberry
+      POSTGRES_PASSWORD: blueberry
+      POSTGRES_DB: blueberry
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U blueberry"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:

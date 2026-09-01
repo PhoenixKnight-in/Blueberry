@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest>=8.0
+pytest-asyncio>=0.23
+respx>=0.21
+
+# In-memory stand-ins so the suite needs no Redis and no Postgres container.
+fakeredis>=2.21
+aiosqlite>=0.19
