@@ -1,0 +1,88 @@
+# The whole Blueberry stack, from a fresh clone.
+#
+#   docker compose up --build
+#
+# Brings up all four pieces the Design Document names: the FastAPI backend, the
+# Redis cache in front of PyPI/GitHub, the PostgreSQL store behind the check
+# history, and the React dashboard that reads it. The VS Code extension is the
+# only component not in here -- it runs inside the developer's editor and is
+# built with `npm install` in `extension/`.
+#
+# The GitHub token is passed through from the host environment (or the host's
+# .env) and is never written into this file or baked into an image.
+
+services:
+  api:
+    build: ./backend
+    ports:
+      - '8000:8000'
+    environment:
+      BLUEBERRY_ENVIRONMENT: development
+      BLUEBERRY_REDIS_URL: redis://redis:6379/0
+      BLUEBERRY_DATABASE_URL: postgresql+asyncpg://blueberry:blueberry@postgres:5432/blueberry
+      # Read from the host env / .env -- not stored here.
+      BLUEBERRY_GITHUB_TOKEN: ${BLUEBERRY_GITHUB_TOKEN:-}
+      # The dashboard is served from :5173 by the container below. A browser
+      # will not call the API cross-origin without this allowlist.
+      BLUEBERRY_CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import urllib.request;urllib.request.urlopen('http://localhost:8000/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  dashboard:
+    build:
+      context: ./dashboard
+      args:
+        # Baked in at build time: Vite inlines env vars into the bundle, so
+        # this is a build argument rather than a runtime environment variable.
+        VITE_BLUEBERRY_API_URL: http://127.0.0.1:8000
+    ports:
+      - '5173:80'
+    depends_on:
+      api:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    # Cache only -- nothing here needs to survive a restart, so an eviction
+    # policy is preferable to unbounded growth.
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: blueberry
+      POSTGRES_PASSWORD: blueberry
+      POSTGRES_DB: blueberry
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U blueberry']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
