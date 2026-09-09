@@ -83,6 +83,14 @@ class CheckResultRecord(Base):
     similarity_detail: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # --- Review state -------------------------------------------------------
+    # The design document's `flagged_packages.status`. It lives on the same row
+    # rather than in a separate table because a flag has exactly one check
+    # behind it, so splitting them would buy a join and no extra information.
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="open", server_default="open"
+    )
+
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     checked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
@@ -97,6 +105,8 @@ class CheckResultRecord(Base):
         Index("ix_check_results_checked_at", "checked_at"),
         Index("ix_check_results_name_checked_at", "normalized_name", "checked_at"),
         Index("ix_check_results_severity", "severity"),
+        # The dashboard's review queue: open flags, newest first.
+        Index("ix_check_results_status_checked_at", "status", "checked_at"),
     )
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid

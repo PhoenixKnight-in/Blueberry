@@ -124,6 +124,19 @@ class Settings(BaseSettings):
     # Convenience for local dev / demos. Real deployments run Alembic.
     database_auto_create: bool = True
 
+    # --- CORS ----------------------------------------------------------------
+    # The dashboard is a separate origin (Vite dev server, or a static host),
+    # so the browser will not call this API without an explicit allowlist. The
+    # VS Code extension is unaffected -- it is not a browser and sends no
+    # Origin header. Listed explicitly rather than "*" because the dashboard
+    # will send state-changing PATCHes.
+    cors_origins: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://127.0.0.1:4173",
+    ]
+
     # --- Scoring (tunable without touching the checkers) --------------------
     risk: RiskWeights = Field(default_factory=RiskWeights)
     thresholds: RiskThresholds = Field(default_factory=RiskThresholds)

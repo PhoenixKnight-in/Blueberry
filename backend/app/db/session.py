@@ -72,6 +72,18 @@ async def get_session() -> AsyncIterator[AsyncSession]:
             raise
 
 
+async def session_dependency() -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency yielding a session for the read/write endpoints.
+
+    Unlike :func:`get_session`, failures here are *not* swallowed. The check
+    endpoint can lose its history row and still be useful; a dashboard request
+    that cannot reach Postgres has nothing to show, so it has to fail loudly
+    and let the router turn it into a 503.
+    """
+    async with get_session() as session:
+        yield session
+
+
 async def init_db() -> bool:
     """Create tables if they do not exist. Returns True on success.
 

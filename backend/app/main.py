@@ -21,10 +21,11 @@ from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
 from .db.session import init_db, shutdown_db
-from .routers import check, health
+from .routers import check, health, packages
 from .services.cache import cache
 
 logging.basicConfig(
@@ -76,8 +77,19 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # The dashboard runs on its own origin; without this the browser blocks
+    # every call to /packages before it reaches the router.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
+
     app.include_router(health.router)
     app.include_router(check.router)
+    app.include_router(packages.router)
 
     return app
 
