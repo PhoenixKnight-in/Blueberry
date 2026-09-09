@@ -6,7 +6,7 @@ not a typosquat, and returns an explainable risk report.
 
 This is **Person 1 (Backend & Security)**'s side of the two-person build.
 
-## Status — Week 2 complete: all four checks live ✅
+## Status — Week 4 complete: all four checks live, dashboard API served ✅
 
 | Deliverable | Where |
 | --- | --- |
@@ -18,10 +18,14 @@ This is **Person 1 (Backend & Security)**'s side of the two-person build.
 | Package-name validation before any external URL is built | [app/security/validation.py](app/security/validation.py) |
 | Redis caching in front of PyPI/GitHub, keyed by package name, TTL'd | [app/services/cache.py](app/services/cache.py) |
 | Postgres models + persistence for every check result | [app/db/](app/db/) |
-| Test suite (262 tests, fully offline) | `tests/` |
+| Dashboard API: list / detail / triage / stats | [app/routers/packages.py](app/routers/packages.py) · [app/schemas/dashboard.py](app/schemas/dashboard.py) |
+| CORS allowlist so the browser dashboard can call this service | [app/main.py](app/main.py) · [app/config.py](app/config.py) |
+| Test suite (295 tests, fully offline) | `tests/` |
 
-Week 1 (skeleton, health check, PyPI checker) is unchanged underneath, and the
-Week 0 response contract is preserved field-for-field.
+Weeks 1–2 (skeleton, health check, and the four checks) are unchanged
+underneath, and the Week 0 response contract is preserved field-for-field. The
+extension in `../extension/` and the dashboard in `../dashboard/` are both built
+against the contract below.
 
 ## Project layout
 
@@ -30,7 +34,7 @@ backend/
 ├── app/
 │   ├── main.py              # App factory + lifespan (HTTP pool, Redis, DB)
 │   ├── config.py            # Env-driven settings, incl. tunable risk weights
-│   ├── routers/             # HTTP layer: /health, /check
+│   ├── routers/             # HTTP layer: /health, /check, /packages, /stats
 │   ├── security/            # Validation of untrusted names and URLs
 │   ├── services/
 │   │   ├── pypi_checker.py      # Check 1: registry existence + metadata
@@ -41,7 +45,7 @@ backend/
 │   │   └── cache.py             # Redis, failure-tolerant
 │   ├── db/                  # SQLAlchemy models, session, repository
 │   ├── data/                # Curated popular-package corpus
-│   └── schemas/             # Pydantic contract: RiskReport, ...
+│   └── schemas/             # Pydantic contracts: RiskReport, CheckSummary, ...
 └── tests/                   # pytest + respx + fakeredis + SQLite
 ```
 
@@ -101,7 +105,8 @@ service logs a warning, skips caching, and skips writing history, but every
 check still runs. To get the full stack:
 
 ```bash
-docker compose up --build     # api + redis + postgres
+cd ..                         # the compose file lives at the repository root
+docker compose up --build     # api + redis + postgres + dashboard
 ```
 
 ### Try it
@@ -116,10 +121,16 @@ Real responses from a live run:
 
 | Input | Verdict | Why |
 | --- | --- | --- |
-| `requests` | `safe` (0) | Exists; `psf/requests` active, 54k stars, matches the package |
-| `reqeusts` | `high_risk` (100) | Not on PyPI — hallucinated; closest real package is `requests` |
+| `requests` | `safe` (0) | Exists; `psf/requests` active, 54,291 stars, matches the package |
+| `numpy` | `safe` (0) | Exists; `numpy/numpy` active, 32,706 stars, pushed today |
+| `beautifulsoup4` | `safe` (15) | Exists and healthy, but the listing links no GitHub repo |
 | `urllib4` | `high_risk` (75) | **Exists**, but one edit from `urllib3` and links no repository |
-| `some-obscure-lib` → `psf/requests` | `caution` | Listing points at an unrelated popular repo |
+| `reqeusts` | `high_risk` (100) | Not on PyPI — hallucinated; closest real package is `requests` |
+| `djangoo`, `flask-loginn` | `high_risk` (100) | Not on PyPI — the slopsquatting shape, one edit from a very popular name |
+
+The fourth outcome — a listing that points at *somebody else's* repository — is
+covered in `tests/test_risk_engine.py` rather than here, since it needs a
+package whose PyPI metadata deliberately misdirects.
 
 ## Run the tests
 
@@ -127,7 +138,7 @@ Real responses from a live run:
 pytest
 ```
 
-262 tests, all offline: PyPI and GitHub are mocked with `respx`, Redis with
+295 tests, all offline: PyPI and GitHub are mocked with `respx`, Redis with
 `fakeredis`, and Postgres with in-memory SQLite through the same models and
 DDL. No containers needed to verify the scoring logic — which is the part that
 gets edited most often.
@@ -221,10 +232,21 @@ both are validated in `app/security/validation.py` *before* any URL is built.
 - `GET /health` — liveness probe.
 - `POST /check` — body `{ "package_name": "...", "ecosystem": "pypi" }` →
   `RiskReport`. `400` unknown ecosystem, `422` invalid name, `502` PyPI down.
-- `GET /packages`, `GET /packages/{id}` — dashboard endpoints, **Week 4**. The
-  persistence they need already exists: `app/db/repository.py` provides
-  `list_check_results(session, package_name=…, severity=…, limit=…, offset=…)`
-  and `get_check_result(session, id)`, with the supporting indexes in place.
+- `GET /packages` — paginated, filterable check history for the dashboard
+  table. Filters: `search`, `package_name`, `severity`, `status`, `min_score`,
+  `limit`, `offset`. Returns `{ items, total, limit, offset }`, where `total` is
+  the count *after* filtering so the UI can render a paginator from one request.
+- `GET /packages/{id}` — one stored check in full, signals included. `404` if
+  there is no such row.
+- `PATCH /packages/{id}` — body `{ "status": "open" | "ignored" | "resolved" }`.
+  Records a reviewer's triage decision. The score is never edited: it is the
+  engine's output, and keeping it fixed beside the decision is what makes the
+  history auditable.
+- `GET /stats` — the aggregates behind the dashboard's summary strip.
+
+All four return `503` — never an empty list — when the history store is
+unreachable. An empty table with no explanation reads as "nothing has ever been
+flagged", which is the opposite of the truth during an outage.
 
 ### `RiskReport` shape
 
@@ -258,8 +280,10 @@ both are validated in `app/security/validation.py` *before* any URL is built.
 }
 ```
 
-## Next (Week 3–4)
+## What the other tracks build on
 
-The VS Code extension and the React dashboard. Nothing in the backend needs to
-change for either: the contract above is stable, and the check history the
-dashboard lists is already accumulating on every request.
+The VS Code extension (`../extension/`) calls `POST /check` and nothing else, so
+it never needs a database to be reachable. The React dashboard
+(`../dashboard/`) calls only the endpoints above, so it never triggers an
+outbound registry request. Neither client can slow the other down, and the
+contract between them is asserted by this suite rather than by convention.
