@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    // Node16 rather than the legacy commonjs/node pair: that combination is
+    // deprecated and stops working in TypeScript 7. There is no "type" field
+    // in package.json, so Node16 still emits CommonJS, which is what VS Code
+    // loads.
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "target": "ES2022",
+    // DOM is here for the web-standard globals the extension host provides --
+    // fetch, Response, AbortController, AbortSignal -- not for any browser API.
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "vscode"],
+    "outDir": "out",
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+
+    // The coding-standards document asks for strict mode explicitly: type
+    // mistakes should surface while writing the extension, not when a
+    // developer's editor throws at them mid-completion.
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
+
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["node_modules", "out"]
+}

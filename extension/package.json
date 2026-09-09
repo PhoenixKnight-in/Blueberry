@@ -1,0 +1,136 @@
+{
+  "name": "blueberry",
+  "displayName": "Blueberry — AI Dependency Validator",
+  "description": "Checks AI-suggested Python packages against PyPI, GitHub, and a typosquat corpus before you install them.",
+  "version": "0.3.0",
+  "publisher": "blueberry",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Linters",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "python",
+    "pypi",
+    "security",
+    "supply chain",
+    "typosquatting",
+    "hallucination"
+  ],
+  "activationEvents": [
+    "onLanguage:python",
+    "onLanguage:pip-requirements",
+    "onLanguage:toml"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "blueberry.checkDocument",
+        "title": "Blueberry: Check Dependencies In This File"
+      },
+      {
+        "command": "blueberry.checkPackage",
+        "title": "Blueberry: Check A Package By Name…"
+      },
+      {
+        "command": "blueberry.showDetails",
+        "title": "Blueberry: Show Risk Details"
+      },
+      {
+        "command": "blueberry.ignorePackage",
+        "title": "Blueberry: Ignore This Package"
+      },
+      {
+        "command": "blueberry.openDashboard",
+        "title": "Blueberry: Open Dashboard"
+      },
+      {
+        "command": "blueberry.clearCache",
+        "title": "Blueberry: Clear Local Result Cache"
+      }
+    ],
+    "configuration": {
+      "title": "Blueberry",
+      "properties": {
+        "blueberry.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check package names as you type. Turning this off leaves the manual commands working."
+        },
+        "blueberry.backendUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:8000",
+          "description": "Base URL of the Blueberry verification backend."
+        },
+        "blueberry.sensitivityThreshold": {
+          "type": "number",
+          "default": 20,
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Minimum risk score that produces a warning. 20 matches the backend's 'caution' threshold; raise it to see only high-risk packages."
+        },
+        "blueberry.enabledEcosystems": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "pypi"
+            ]
+          },
+          "default": [
+            "pypi"
+          ],
+          "description": "Which package ecosystems to check. Phase one supports PyPI only."
+        },
+        "blueberry.ignoredPackages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Package names to never warn about. Added to by the 'Ignore This Package' command."
+        },
+        "blueberry.dashboardUrl": {
+          "type": "string",
+          "default": "http://127.0.0.1:5173",
+          "description": "URL the 'Open Dashboard' command launches."
+        },
+        "blueberry.debounceMs": {
+          "type": "number",
+          "default": 600,
+          "minimum": 0,
+          "maximum": 5000,
+          "description": "How long to wait after the last keystroke before checking a document."
+        },
+        "blueberry.requestTimeoutMs": {
+          "type": "number",
+          "default": 8000,
+          "minimum": 500,
+          "description": "How long to wait for the backend before giving up on a check."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\"",
+    "test": "npm run compile && node --test \"out/test/**/*.test.js\"",
+    "pretest": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint": "^8.56.0",
+    "prettier": "^3.2.0",
+    "typescript": "^5.3.0"
+  }
+}
