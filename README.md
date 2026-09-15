@@ -27,14 +27,14 @@ which is why the first row matters as much as the second.
 
 ## Repository layout
 
-```
-blueberry/
-├── backend/           # FastAPI service — the four checks and the risk engine
-├── extension/         # VS Code extension — detects names, renders the warning
-├── dashboard/         # React + TypeScript — review flagged packages
-├── docs/              # Project guide, design document, coding standards
-└── docker-compose.yml # Postgres + Redis + API + dashboard
-```
+  ```
+  blueberry/
+  ├── backend/           # FastAPI service — the four checks and the risk engine
+  ├── extension/         # VS Code extension — detects names, renders the warning
+  ├── dashboard/         # React + TypeScript — review flagged packages
+  ├── docs/              # Project guide, design document, coding standards
+  └── docker-compose.yml # Postgres + Redis + API + dashboard
+  ```
 
 ## Architecture
 

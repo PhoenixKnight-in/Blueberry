@@ -22,3 +22,4 @@ out/
 # Local databases / build output
 *.sqlite3
 *.db
+docker-compose.override.yml
